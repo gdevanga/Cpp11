@@ -1,0 +1,187 @@
+//int, 2, field1 | bitblock, 4, ~bit, 24, field2.bit1; bit, 8, field2.bit2 | int, 10, field3,
+
+#include "pch.h"
+#define _CRT_SECURE_NO_WARNINGS
+#include <iostream>
+#include <fstream>
+#include <stdlib.h>
+#include <string.h>
+#include <vector>
+#include <unordered_map>
+using namespace std;
+
+class FlatFileParser
+{
+
+public:
+class Field
+{
+public:
+int startIndex;
+int size;
+char* fieldName;
+char* fieldData;
+char* fieldType;
+vector<Field*> bitFields;
+};
+
+vector<Field*> vFields;
+unordered_map<char*, Field*> mapFields;
+int totalSize;
+char* completeStr;
+
+void readData();
+void readSchema();
+void writeData();
+void printFields();
+void parseBitblockFields(char* bitBlockSchema, Field* f);
+};
+
+void FlatFileParser::writeData()
+{
+completeStr = new char[totalSize + 1];
+completeStr[0] = '\0';
+for (Field* f : vFields)
+{
+strncat(completeStr, f->fieldData, f->size);
+}
+cout << "Total string : " << completeStr << endl;
+
+}
+
+void FlatFileParser::readSchema()
+{
+FILE* f = fopen("C:\\Users\\giris\\Downloads\\schema.txt", "r");
+
+// Determine file size
+fseek(f, 0, SEEK_END);
+size_t size = ftell(f);
+
+char* input = new char[size];
+
+rewind(f);
+fread(input, sizeof(char), size, f);
+
+
+vector<char*> vTokens;
+char* pch;
+pch = strtok(input, "|");
+while (pch != NULL)
+{
+vTokens.push_back(pch);
+pch = strtok(NULL, "|");
+}
+
+
+int localIndex = 0;
+totalSize = 0;
+for (char* tok : vTokens)
+{
+Field* f = new Field();
+f->fieldType = _strdup(strtok(tok, ","));
+f->startIndex = localIndex;
+f->size = atoi(strtok(NULL, ","));
+localIndex = localIndex + f->size;
+if (strncmp(f->fieldType, "bitblock", sizeof(f->fieldType)) == 0)
+{
+char* temp1 = strtok(NULL, "~");
+cout << "First strtok " << temp1 << endl;
+parseBitblockFields(temp1, f);
+
+f->fieldName = (char*)"noName";
+}
+else
+{
+f->fieldName = _strdup(strtok(NULL, ","));
+}
+vFields.push_back(f);
+mapFields[f->fieldName] = f;
+totalSize += f->size;
+}
+
+delete[] input;
+}
+
+void FlatFileParser::parseBitblockFields(char* bitBlockSchema, Field* f)
+{
+vector<char*> vBitTokens;
+char* pchBit;
+pchBit = strtok(bitBlockSchema, ";");
+while (pchBit != NULL)
+{
+vBitTokens.push_back(pchBit);
+pchBit = strtok(NULL, ";");
+}
+
+for (char* tok : vBitTokens)
+{
+cout << "bit token is " << tok << endl;
+Field* fBit = new Field();
+fBit->fieldType = _strdup(strtok(tok, ","));
+fBit->size = atoi(strtok(NULL, ","));
+fBit->fieldName = _strdup(strtok(NULL, ","));
+f->bitFields.push_back(fBit);
+}
+}
+
+void FlatFileParser::printFields()
+{
+for (Field* f : vFields)
+{
+if (strncmp(f->fieldType, "bitblock", sizeof(f->fieldType)) == 0)
+{
+cout << "Field : " << f->startIndex << " " << f->size << " " << f->fieldData << endl;
+for (Field* fBit : f->bitFields)
+cout << " \t Bit Field : " << fBit->size << " " << fBit->fieldName << " " << fBit->fieldType << endl;
+}
+else
+{
+cout << "Field : " << f->startIndex << " " << f->size << " " << f->fieldName << " " << f->fieldType << " " << f->fieldData << endl;
+}
+}
+}
+
+int main() {
+
+FlatFileParser ffp;
+ffp.readSchema();
+ffp.readData();
+ffp.printFields();
+ffp.writeData();
+
+return 0;
+}
+
+void FlatFileParser::readData()
+{
+std::ifstream is("C:\\Users\\giris\\Downloads\\BinaryData.bin", std::ifstream::binary);
+if (is) {
+// get length of file:
+is.seekg(0, is.end);
+int length = is.tellg();
+is.seekg(0, is.beg);
+
+char * buffer = new char[length];
+
+std::cout << "Reading " << length << " characters... ";
+// read data as a block:
+is.read(buffer, 16);
+buffer[16] = '\0';
+
+if (is)
+std::cout << "all characters read successfully. buffer : " << buffer << endl;
+else
+std::cout << "error: only " << is.gcount() << " could be read";
+is.close();
+
+// copy to field.fieldData
+for (Field* f : vFields)
+{
+f->fieldData = new char[f->size];
+strncpy(f->fieldData, buffer + f->startIndex, f->size);
+f->fieldData[f->size] = '\0';
+}
+
+delete[] buffer;
+}
+}
